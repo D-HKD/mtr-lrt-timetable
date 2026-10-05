@@ -1,8 +1,7 @@
-// ========= 改呢度！呢個係你嘅Cloudflare Worker網址 =========
-const PROXY_BASE = "https://mtr-proxy.idyl-2014061.workers.dev";
-// =====================================================
+// 用公開CORS proxy，唔需要自己架Cloudflare Worker
+const CORS_PROXY = "https://corsproxy.io/?";
 
-// 車站清單【修正：輕鐵API改用 lrt 正確路徑】
+// 車站清單｜輕鐵LRT + 屯馬綫TML
 const STATIONS = [
   {name:"輕鐵｜天水圍站", api:"https://rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule?station_id=1027", type:"lr"},
   {name:"輕鐵｜天榮站", api:"https://rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule?station_id=1017", type:"lr"},
@@ -17,9 +16,8 @@ const STATIONS = [
 const stationSel = document.getElementById("stationSel");
 const resultBox = document.getElementById("resultBox");
 const refreshBtn = document.getElementById("refreshBtn");
-document.getElementById("proxyUrl").textContent = PROXY_BASE;
 
-// 填入下拉選單
+// 填充下拉車站選單
 STATIONS.forEach((s,idx)=>{
   const opt = document.createElement("option");
   opt.value = idx;
@@ -32,61 +30,59 @@ async function loadTimetable(){
   const selIdx = stationSel.value;
   const station = STATIONS[selIdx];
   const targetUrl = encodeURIComponent(station.api);
-  const fetchUrl = `${PROXY_BASE}?target=${targetUrl}`;
+  const fetchUrl = `${CORS_PROXY}${targetUrl}`;
   try{
     const res = await fetch(fetchUrl);
     const data = await res.json();
+    console.log("API原始回傳：", data);
     renderResult(station.name, data, station.type);
   }catch(e){
-    resultBox.innerHTML = `<div class="error">讀取失敗：${e.message}<br>檢查Worker網址同API狀態</div>`;
+    console.error(e);
+    resultBox.innerHTML = `<div class="error">連接API失敗：${e.message}</div>`;
   }
 }
 
-// 渲染班次，分輕鐵（platform_list）同屯馬綫（schedule）
 function renderResult(stationName, data, type){
   let html = `<div class="station-title">${stationName}</div>`;
 
-  // 輕鐵
   if(type === "lr"){
-    if (!data || !data.platform_list || data.platform_list.length === 0) {
-      html += `<div>暫時冇預計到站班次</div>`;
-      resultBox.innerHTML = html;
-      return;
+    // 輕鐵LRT
+    if(data.status === 0 || !data.platform_list || data.platform_list.length === 0){
+      html += `<div>✅ API正常，暫時冇即將到站嘅輕鐵班次<br>（港鐵API只會列幾分鐘內到站車）</div>`;
+    }else{
+      data.platform_list.forEach(platform => {
+        const platformNo = platform.platform;
+        if(platform.route_list && platform.route_list.length>0){
+          platform.route_list.forEach(route =>{
+            const routeNo = route.route_no;
+            const dest = route.dest_ch;
+            const time = route.time_ch;
+            html += `
+            <div class="train-item">
+              <div class="train-dir">月台${platformNo}｜${routeNo}號線，往：${dest}</div>
+              <div class="train-time">預計到站：${time}</div>
+            </div>`;
+          })
+        }
+      })
     }
-    data.platform_list.forEach(platform => {
-      const platformNo = platform.platform;
-      if(platform.route_list && platform.route_list.length>0){
-        platform.route_list.forEach(route =>{
-          const routeNo = route.route_no;
-          const dest = route.dest_ch;
-          const time = route.time_ch;
-          html += `
-          <div class="train-item">
-            <div class="train-dir">月台${platformNo}｜${routeNo}號線，往：${dest}</div>
-            <div class="train-time">預計到站：${time}</div>
-          </div>`;
-        })
-      }
-    })
   }
-  // 屯馬綫
   else if(type === "tml"){
-    if(!data || !data.schedule || data.schedule.length ===0){
-      html += `<div>暫時冇預計到站班次</div>`;
-      resultBox.innerHTML = html;
-      return;
+    // 屯馬綫
+    if(data.status === 0 || !data.schedule || data.schedule.length ===0){
+      html += `<div>✅ API正常，暫時冇即將到站嘅列車班次</div>`;
+    }else{
+      data.schedule.forEach(item=>{
+        const dest = item.dest_ch || item.dest;
+        const time = item.time_ch || item.time;
+        html += `
+        <div class="train-item">
+          <div class="train-dir">往：${dest}</div>
+          <div class="train-time">預計到站：${time}</div>
+        </div>`;
+      })
     }
-    data.schedule.forEach(item=>{
-      const dest = item.dest_ch || item.dest;
-      const time = item.time_ch || item.time;
-      html += `
-      <div class="train-item">
-        <div class="train-dir">往：${dest}</div>
-        <div class="train-time">預計到站：${time}</div>
-      </div>`;
-    })
   }
-
   resultBox.innerHTML = html;
 }
 
