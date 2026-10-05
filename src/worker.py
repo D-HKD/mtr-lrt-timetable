@@ -1,7 +1,8 @@
 from workers import WorkerEntrypoint, Response
+from urllib.parse import urlparse
 import json
 
-# 車站清單（你原本揀嗰啲）
+# 車站清單
 LR_STATIONS = [
     {"name": "輕鐵｜天水圍站", "type": "lr", "id": 1027},
     {"name": "輕鐵｜天榮站", "type": "lr", "id": 1017},
@@ -16,131 +17,179 @@ TML_STATIONS = [
 ]
 ALL_STATIONS = LR_STATIONS + TML_STATIONS
 
-HTML_TEMPLATE = """
+HTML = """
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>港鐵輕鐵/屯馬綫到站預報</title>
+<title>輕鐵｜屯馬綫 到站預報</title>
 <style>
-/* MTR主色 + 深色模式設定 */
 :root {
     --mtr-red: #9D232B;
-    --bg: #ffffff;
-    --card-bg: #ffffff;
+    --bg: #f4f5f7;
+    --card: #ffffff;
     --text: #222222;
-    --text-light: #666666;
-    --border: #e5e7eb;
+    --text-secondary: #606060;
+    --border: #e2e2e2;
 }
-@media (prefers-color-scheme: dark) {
-    :root {
-        --bg: #121212;
-        --card-bg: #1e1e1e;
-        --text: #f0f0f0;
-        --text-light: #aaaaaa;
-        --border: #333333;
-    }
+.dark-mode {
+    --bg: #111111;
+    --card: #1f1f1f;
+    --text: #eeeeee;
+    --text-secondary: #aaaaaa;
+    --border: #333333;
 }
-*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
-body{background:var(--bg);color:var(--text);padding:16px;max-width:700px;margin:0 auto;transition:background 0.3s,color 0.3s;}
-header{margin-bottom:20px;}
-h1{color:var(--mtr-red);font-size:22px;font-weight:700;}
-.subtitle{color:var(--text-light);font-size:14px;margin-top:4px;}
+*{box-sizing:border-box;margin:0;padding:0;font-family: -apple-system, BlinkMacSystemFont, "Noto Sans HK", sans-serif;}
+body{background:var(--bg);color:var(--text);padding:14px;max-width:720px;margin:0 auto;transition:0.25s;}
+header{
+    background:var(--mtr-red);
+    color:white;
+    padding:14px 16px;
+    border-radius:12px;
+    margin-bottom:14px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:10px;
+}
+.header-title{font-size:20px;font-weight:bold;}
+.header-info{font-size:13px;opacity:0.9;}
+.ctrl-bar{display:flex;gap:8px;flex-wrap:wrap;}
+button{
+    background:rgba(255,255,255,0.22);
+    color:white;
+    border:0;
+    padding:6px 10px;
+    border-radius:8px;
+    font-size:14px;
+    cursor:pointer;
+}
+button:hover{background:rgba(255,255,255,0.35);}
 .station-card{
-    background:var(--card-bg);
+    background:var(--card);
     border:1px solid var(--border);
     border-radius:12px;
-    padding:18px;
-    margin-bottom:14px;
-    box-shadow:0 2px 6px rgba(0,0,0,0.06);
+    padding:16px;
+    margin-bottom:12px;
 }
-.station-title{
+.station-name{
     color:var(--mtr-red);
     font-size:18px;
     font-weight:bold;
     margin-bottom:10px;
 }
-.arrival-item{
-    padding:6px 0;
+.train-item{
+    padding:5px 0;
     font-size:16px;
-    color:var(--text);
 }
-.nodata{color:var(--text-light);}
-#loading{display:none;}
-/* 防閃：只更新內容，唔成頁重刷 */
+.no-data{color:var(--text-secondary);}
 </style>
 </head>
 <body>
 <header>
-    <h1>港鐵到站預報</h1>
-    <div class="subtitle">天水圍 / 天榮 / 豐年路 / 元朗｜屯馬綫屯門、天水圍、朗屏、元朗</div>
+    <div>
+        <div class="header-title">輕鐵｜屯馬綫 到站預報</div>
+        <div class="header-info">自動更新｜每30秒</div>
+    </div>
+    <div class="ctrl-bar">
+        <button id="btnDark">切換深色模式</button>
+        <button id="btnSound">提示音效：關</button>
+    </div>
 </header>
-<div id="container"></div>
+<div id="stationList"></div>
+
 <script>
 const stations = %s;
-const container = document.getElementById("container");
+let soundOn = localStorage.getItem("sound") === "1";
+let dark = localStorage.getItem("dark") === "1";
+const soundBtn = document.getElementById("btnSound");
+const darkBtn = document.getElementById("btnDark");
+const container = document.getElementById("stationList");
 
-async function fetchData() {
-    const res = await fetch("/api/data");
+// 初始化設定
+if(dark) document.body.classList.add("dark-mode");
+updateSoundBtn();
+
+darkBtn.onclick = ()=>{
+    document.body.classList.toggle("dark-mode");
+    localStorage.setItem("dark", document.body.classList.contains("dark-mode") ? "1":"0");
+}
+soundBtn.onclick = ()=>{
+    soundOn = !soundOn;
+    localStorage.setItem("sound", soundOn?"1":"0");
+    updateSoundBtn();
+}
+function updateSoundBtn(){
+    soundBtn.innerText = `提示音效：${soundOn ? "開":"關"}`;
+}
+function playBeep(){
+    if(!soundOn) return;
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);gain.connect(audioCtx.destination);
+    osc.frequency.value=880;gain.gain.value=0.1;
+    osc.start();osc.stop(audioCtx.currentTime+0.15);
+}
+
+async function getData(){
+    const res = await fetch("/api/get");
     return await res.json();
 }
-async function render() {
-    const data = await fetchData();
+async function renderPage(){
+    const data = await getData();
     let html = "";
-    for(const s of stations) {
-        const stationData = data[s.name];
+    for(const s of stations){
+        const info = data[s.name] || {trains:[]};
         html += `<div class="station-card">
-            <div class="station-title">${s.name}</div>`;
-        if(stationData && stationData.trains && stationData.trains.length>0) {
-            for(const t of stationData.trains) {
-                html += `<div class="arrival-item">${t.dest}：${t.time}</div>`;
+            <div class="station-name">${s.name}</div>`;
+        if(info.trains.length>0){
+            for(const t of info.trains){
+                html += `<div class="train-item">${t.dest}：${t.time}</div>`;
             }
-        } else {
-            html += `<div class="nodata">暫無到站資料（可能已收車）</div>`;
+            playBeep();
+        }else{
+            html += `<div class="no-data">暫無到站資料（可能已收車）</div>`;
         }
         html += `</div>`;
     }
     container.innerHTML = html;
 }
-// 每30秒更新，唔會成頁閃
-render();
-setInterval(render, 30000);
+
+renderPage();
+setInterval(renderPage,30000);
 </script>
 </body>
 </html>
 """
 
-async def fetch_mtr_data(station):
-    station_type = station["type"]
-    if station_type == "lr":
+async def fetch_etd(station):
+    if station["type"] == "lr":
         url = f"https://api.mtr.com.hk/opendata/lightrail/v1/station/{station['id']}/etd"
     else:
         url = f"https://api.mtr.com.hk/opendata/tml/v1/station/{station['code']}/etd"
-    headers = {"User-Agent":"Mozilla/5.0 (HK MTR ETD Client)"}
+    headers = {"User-Agent":"Mozilla/5.0"}
     resp = await fetch(url, headers=headers)
     if not resp.ok:
         return {"trains":[]}
     j = await resp.json()
     trains = []
-    if station_type == "lr":
-        for entry in j.get("etds",[]):
-            trains.append({"dest":entry["dest"], "time":f"{entry['time']} 分鐘"})
-    else:
-        for entry in j.get("etds",[]):
-            trains.append({"dest":entry["dest"], "time":f"{entry['time']} 分鐘"})
+    for item in j.get("etds",[]):
+        trains.append({"dest":item["dest"], "time":f"{item['time']} 分鐘"})
     return {"trains":trains}
 
 class Handler(WorkerEntrypoint):
-    async def on_fetch(self, request):
-        path = urlparse(request.url).path
-        if path == "/api/data":
-            result = {}
+    async def on_fetch(self, req):
+        path = urlparse(req.url).path
+        if path == "/api/get":
+            out = {}
             for s in ALL_STATIONS:
-                result[s["name"]] = await fetch_mtr_data(s)
-            return Response(json.dumps(result), headers={"Content-Type":"application/json"})
+                out[s["name"]] = await fetch_etd(s)
+            return Response(json.dumps(out), headers={"Content-Type":"application/json;charset=utf-8"})
         else:
-            page = HTML_TEMPLATE % json.dumps(ALL_STATIONS)
+            page = HTML % json.dumps(ALL_STATIONS)
             return Response(page, headers={"Content-Type":"text/html;charset=utf-8"})
 
 def main():
