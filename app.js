@@ -2,7 +2,7 @@
 const PROXY_BASE = "https://mtr-proxy.idyl-2014061.workers.dev";
 // =====================================================
 
-// 車站清單（你指定嘅全部站）
+// 車站清單【修正：輕鐵API改用 lrt 正確路徑】
 const STATIONS = [
   {name:"輕鐵｜天水圍站", api:"https://rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule?station_id=1027", type:"lr"},
   {name:"輕鐵｜天榮站", api:"https://rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule?station_id=1017", type:"lr"},
@@ -46,14 +46,13 @@ async function loadTimetable(){
 function renderResult(stationName, data, type){
   let html = `<div class="station-title">${stationName}</div>`;
 
-  // 輕鐵 正確結構：platform_list
+  // 輕鐵
   if(type === "lr"){
     if (!data || !data.platform_list || data.platform_list.length === 0) {
       html += `<div>暫時冇預計到站班次</div>`;
       resultBox.innerHTML = html;
       return;
     }
-    // 逐個月台
     data.platform_list.forEach(platform => {
       const platformNo = platform.platform;
       if(platform.route_list && platform.route_list.length>0){
@@ -93,5 +92,4 @@ function renderResult(stationName, data, type){
 
 stationSel.addEventListener("change", loadTimetable);
 refreshBtn.addEventListener("click", loadTimetable);
-// 開頁自動載入
 loadTimetable();
