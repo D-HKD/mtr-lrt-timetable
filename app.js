@@ -1,91 +1,94 @@
-// 用公開CORS proxy，唔需要自己架Cloudflare Worker
-const CORS_PROXY = "https://corsproxy.io/?";
+// 👉 呢度要改！換成你部署完 Cloudflare Worker 個URL
+const WORKER_URL = "https://mtr-lrt-proxy.xxx.workers.dev";
 
-// 車站清單｜輕鐵LRT + 屯馬綫TML
-const STATIONS = [
-  {name:"輕鐵｜天水圍站", api:"https://rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule?station_id=1027", type:"lr"},
-  {name:"輕鐵｜天榮站", api:"https://rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule?station_id=1017", type:"lr"},
-  {name:"輕鐵｜豐年路站", api:"https://rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule?station_id=1044", type:"lr"},
-  {name:"輕鐵｜元朗站", api:"https://rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule?station_id=1045", type:"lr"},
-  {name:"屯馬綫｜屯門站", api:"https://rt.data.gov.hk/v1/transport/mtr/mtr/getSchedule?line=TML&station=TUM", type:"tml"},
-  {name:"屯馬綫｜天水圍站", api:"https://rt.data.gov.hk/v1/transport/mtr/mtr/getSchedule?line=TML&station=TIS", type:"tml"},
-  {name:"屯馬綫｜朗屏站", api:"https://rt.data.gov.hk/v1/transport/mtr/mtr/getSchedule?line=TML&station=LOP", type:"tml"},
-  {name:"屯馬綫｜元朗站", api:"https://rt.data.gov.hk/v1/transport/mtr/mtr/getSchedule?line=TML&station=YUL", type:"tml"},
+// 車站對照
+const TML_STATIONS = [
+    {code:"TUM", name:"屯門"},
+    {code:"TIS", name:"天水圍"},
+    {code:"LOP", name:"朗屏"},
+    {code:"YUL", name:"元朗"},
+];
+const LRT_STATIONS = [
+    {code:"LR1027", name:"天水圍站"},
+    {code:"LR1017", name:"天榮站"},
+    {code:"LR1044", name:"豐年路站"},
+    {code:"LR1045", name:"元朗站"},
 ];
 
-const stationSel = document.getElementById("stationSel");
-const resultBox = document.getElementById("resultBox");
-const refreshBtn = document.getElementById("refreshBtn");
-
-// 填充下拉車站選單
-STATIONS.forEach((s,idx)=>{
-  const opt = document.createElement("option");
-  opt.value = idx;
-  opt.textContent = s.name;
-  stationSel.appendChild(opt);
-});
-
-async function loadTimetable(){
-  resultBox.innerHTML = `<div class="loading">載入實時班次⋯</div>`;
-  const selIdx = stationSel.value;
-  const station = STATIONS[selIdx];
-  const targetUrl = encodeURIComponent(station.api);
-  const fetchUrl = `${CORS_PROXY}${targetUrl}`;
-  try{
-    const res = await fetch(fetchUrl);
-    const data = await res.json();
-    console.log("API原始回傳：", data);
-    renderResult(station.name, data, station.type);
-  }catch(e){
-    console.error(e);
-    resultBox.innerHTML = `<div class="error">連接API失敗：${e.message}</div>`;
-  }
+function updateClock(){
+    const now = new Date();
+    document.getElementById("pageTime").textContent = now.toLocaleTimeString("zh-HK");
 }
 
-function renderResult(stationName, data, type){
-  let html = `<div class="station-title">${stationName}</div>`;
+async function fetchAll(){
+    try{
+        const res = await fetch(WORKER_URL);
+        const raw = await res.json();
+        renderTML(raw);
+        renderLRT(raw);
+    }catch(e){
+        console.error(e);
+    }
+}
 
-  if(type === "lr"){
-    // 輕鐵LRT
-    if(data.status === 0 || !data.platform_list || data.platform_list.length === 0){
-      html += `<div>✅ API正常，暫時冇即將到站嘅輕鐵班次<br>（港鐵API只會列幾分鐘內到站車）</div>`;
-    }else{
-      data.platform_list.forEach(platform => {
-        const platformNo = platform.platform;
-        if(platform.route_list && platform.route_list.length>0){
-          platform.route_list.forEach(route =>{
-            const routeNo = route.route_no;
-            const dest = route.dest_ch;
-            const time = route.time_ch;
-            html += `
-            <div class="train-item">
-              <div class="train-dir">月台${platformNo}｜${routeNo}號線，往：${dest}</div>
-              <div class="train-time">預計到站：${time}</div>
-            </div>`;
-          })
+// 渲染屯馬綫
+function renderTML(data){
+    let html = "";
+    TML_STATIONS.forEach(s=>{
+        const d = data[s.code];
+        html += `<div class="station-block">
+            <div class="station-name">${s.name} <small>${s.code}</small></div>`;
+        if(d && d.status === 1 && d.schedule?.length>0){
+            d.schedule.forEach(item=>{
+                html += `
+                <div class="train-row">
+                    <div class="train-left">
+                        <div class="dest">往 ${item.dest_ch}</div>
+                    </div>
+                    <div class="train-min">${item.time_ch}</div>
+                </div>`
+            })
+        }else{
+            html += `<div class="train-row"><div>暫無班次</div></div>`
         }
-      })
-    }
-  }
-  else if(type === "tml"){
-    // 屯馬綫
-    if(data.status === 0 || !data.schedule || data.schedule.length ===0){
-      html += `<div>✅ API正常，暫時冇即將到站嘅列車班次</div>`;
-    }else{
-      data.schedule.forEach(item=>{
-        const dest = item.dest_ch || item.dest;
-        const time = item.time_ch || item.time;
-        html += `
-        <div class="train-item">
-          <div class="train-dir">往：${dest}</div>
-          <div class="train-time">預計到站：${time}</div>
-        </div>`;
-      })
-    }
-  }
-  resultBox.innerHTML = html;
+        html += "</div>"
+    })
+    document.getElementById("tmlPanel").innerHTML = html;
 }
 
-stationSel.addEventListener("change", loadTimetable);
-refreshBtn.addEventListener("click", loadTimetable);
-loadTimetable();
+// 渲染輕鐵
+function renderLRT(data){
+    let html = "";
+    LRT_STATIONS.forEach(s=>{
+        const d = data[s.code];
+        html += `<div class="station-block">
+            <div class="station-name">${s.name} <small>${s.code.replace("LR","")}</small></div>`;
+        if(d && d.status ===1 && d.platform_list?.length>0){
+            d.platform_list.forEach(plat=>{
+                plat.route_list.forEach(rt=>{
+                    html += `
+                    <div class="train-row">
+                        <div class="train-left">
+                            <div class="route-tag">${rt.route_no}</div>
+                            <div>
+                                <div class="dest">${rt.dest_ch}</div>
+                                <div class="platform">月台${plat.platform}</div>
+                            </div>
+                        </div>
+                        <div class="train-min">${rt.time_ch}</div>
+                    </div>`
+                })
+            })
+        }else{
+            html += `<div class="train-row"><div>暫無班次</div></div>`
+        }
+        html += "</div>"
+    })
+    document.getElementById("lrtPanel").innerHTML = html;
+}
+
+// 每30秒自動刷新
+fetchAll();
+updateClock();
+setInterval(fetchAll,30000);
+setInterval(updateClock,1000);
