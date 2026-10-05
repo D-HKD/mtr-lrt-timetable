@@ -104,62 +104,71 @@ button:hover{background:rgba(255,255,255,0.35);}
 const stations = %s;
 let soundOn = localStorage.getItem("sound") === "1";
 let dark = localStorage.getItem("dark") === "1";
-const soundBtn = document.getElementById("btnSound");
-const darkBtn = document.getElementById("btnDark");
-const container = document.getElementById("stationList");
 
-// 初始化設定
-if(dark) document.body.classList.add("dark-mode");
-updateSoundBtn();
+// 等DOM完全載入先綁定按鈕事件
+document.addEventListener('DOMContentLoaded', function() {
+    const soundBtn = document.getElementById("btnSound");
+    const darkBtn = document.getElementById("btnDark");
+    const container = document.getElementById("stationList");
 
-darkBtn.onclick = ()=>{
-    document.body.classList.toggle("dark-mode");
-    localStorage.setItem("dark", document.body.classList.contains("dark-mode") ? "1":"0");
-}
-soundBtn.onclick = ()=>{
-    soundOn = !soundOn;
-    localStorage.setItem("sound", soundOn?"1":"0");
+    // 初始化設定
+    if(dark) document.body.classList.add("dark-mode");
     updateSoundBtn();
-}
-function updateSoundBtn(){
-    soundBtn.innerText = `提示音效：${soundOn ? "開":"關"}`;
-}
-function playBeep(){
-    if(!soundOn) return;
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain);gain.connect(audioCtx.destination);
-    osc.frequency.value=880;gain.gain.value=0.1;
-    osc.start();osc.stop(audioCtx.currentTime+0.15);
-}
 
-async function getData(){
-    const res = await fetch("/api/get");
-    return await res.json();
-}
-async function renderPage(){
-    const data = await getData();
-    let html = "";
-    for(const s of stations){
-        const info = data[s.name] || {trains:[]};
-        html += `<div class="station-card">
-            <div class="station-name">${s.name}</div>`;
-        if(info.trains.length>0){
-            for(const t of info.trains){
-                html += `<div class="train-item">${t.dest}：${t.time}</div>`;
-            }
-            playBeep();
-        }else{
-            html += `<div class="no-data">暫無到站資料（可能已收車）</div>`;
-        }
-        html += `</div>`;
+    darkBtn.onclick = ()=>{
+        document.body.classList.toggle("dark-mode");
+        localStorage.setItem("dark", document.body.classList.contains("dark-mode") ? "1":"0");
     }
-    container.innerHTML = html;
-}
+    soundBtn.onclick = ()=>{
+        soundOn = !soundOn;
+        localStorage.setItem("sound", soundOn?"1":"0");
+        updateSoundBtn();
+    }
+    function updateSoundBtn(){
+        soundBtn.innerText = `提示音效：${soundOn ? "開":"關"}`;
+    }
+    function playBeep(){
+        if(!soundOn) return;
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);gain.connect(audioCtx.destination);
+        osc.frequency.value=880;gain.gain.value=0.1;
+        osc.start();osc.stop(audioCtx.currentTime+0.15);
+    }
 
-renderPage();
-setInterval(renderPage,30000);
+    async function getData(){
+        try {
+            const res = await fetch("/api/get");
+            return await res.json();
+        } catch(e) {
+            console.error("API錯誤",e);
+            return {};
+        }
+    }
+    async function renderPage(){
+        const data = await getData();
+        let html = "";
+        for(const s of stations){
+            const info = data[s.name] || {trains:[]};
+            html += `<div class="station-card">
+                <div class="station-name">${s.name}</div>`;
+            if(info.trains.length>0){
+                for(const t of info.trains){
+                    html += `<div class="train-item">${t.dest}：${t.time}</div>`;
+                }
+                playBeep();
+            }else{
+                html += `<div class="no-data">暫無到站資料（可能已收車）</div>`;
+            }
+            html += `</div>`;
+        }
+        container.innerHTML = html;
+    }
+
+    renderPage();
+    setInterval(renderPage,30000);
+});
 </script>
 </body>
 </html>
