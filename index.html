@@ -3,27 +3,32 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>輕鐵｜屯馬綫 到站時刻表</title>
+<title>港鐵｜輕鐵+屯馬綫 即時到站</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="container">
-  <header>
-    <h1>港鐵 輕鐵 / 屯馬綫 實時到站</h1>
-    <div class="proxy-note">Proxy：<span id="proxyUrl"></span></div>
-  </header>
-
-  <div class="station-select">
-    <label>揀車站：</label>
-    <select id="stationSel"></select>
-    <button id="refreshBtn">重新更新</button>
-  </div>
-
-  <div id="resultBox" class="result-box">
-    <div class="loading">載入中⋯</div>
-  </div>
+    <header>
+        <h1>即時到站</h1>
+        <div class="time" id="pageTime">21:52:07</div>
+    </header>
+    <div class="grid">
+        <div class="card">
+            <div class="card-head">
+                <span class="line-name">屯馬綫 <small>MTR</small></span>
+                <span class="live">LIVE</span>
+            </div>
+            <div id="tmlPanel"></div>
+        </div>
+        <div class="card">
+            <div class="card-head">
+                <span class="line-name">輕鐵 <small>LRT</small></span>
+                <span class="live">LIVE</span>
+            </div>
+            <div id="lrtPanel"></div>
+        </div>
+    </div>
 </div>
-
 <script src="app.js"></script>
 </body>
 </html>
