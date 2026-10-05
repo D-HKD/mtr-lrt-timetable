@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>輕鐵｜屯馬綫 到站時刻表</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>港鐵 輕鐵 / 屯馬綫 實時到站</h1>
+    <div class="proxy-note">Proxy：<span id="proxyUrl"></span></div>
+  </header>
+
+  <div class="station-select">
+    <label>揀車站：</label>
+    <select id="stationSel"></select>
+    <button id="refreshBtn">重新更新</button>
+  </div>
+
+  <div id="resultBox" class="result-box">
+    <div class="loading">載入中⋯</div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
