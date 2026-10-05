@@ -24,6 +24,9 @@ HTML = """
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>輕鐵｜屯馬綫 到站預報</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <style>
 :root {
     --mtr-red: #9D232B;
@@ -48,6 +51,8 @@ header{
     padding:14px 16px;
     border-radius:12px;
     margin-bottom:14px;
+}
+.header-top{
     display:flex;
     justify-content:space-between;
     align-items:center;
@@ -55,8 +60,8 @@ header{
     gap:10px;
 }
 .header-title{font-size:20px;font-weight:bold;}
-.header-info{font-size:13px;opacity:0.9;}
-.ctrl-bar{display:flex;gap:8px;flex-wrap:wrap;}
+.header-info{font-size:13px;opacity:0.9;margin-top:4px;}
+.ctrl-bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
 button{
     background:rgba(255,255,255,0.22);
     color:white;
@@ -89,13 +94,16 @@ button:hover{background:rgba(255,255,255,0.35);}
 </head>
 <body>
 <header>
-    <div>
-        <div class="header-title">輕鐵｜屯馬綫 到站預報</div>
-        <div class="header-info">自動更新｜每30秒</div>
-    </div>
-    <div class="ctrl-bar">
-        <button id="btnDark">切換深色模式</button>
-        <button id="btnSound">提示音效：關</button>
+    <div class="header-top">
+        <div>
+            <div class="header-title">輕鐵｜屯馬綫 到站預報</div>
+            <div class="header-info">自動更新｜每30秒</div>
+        </div>
+        <div class="ctrl-bar">
+            <button id="btnRefresh">手動重新整理</button>
+            <button id="btnDark">切換深色模式</button>
+            <button id="btnSound">提示音效：關</button>
+        </div>
     </div>
 </header>
 <div id="stationList"></div>
@@ -105,70 +113,74 @@ const stations = %s;
 let soundOn = localStorage.getItem("sound") === "1";
 let dark = localStorage.getItem("dark") === "1";
 
-// 等DOM完全載入先綁定按鈕事件
-document.addEventListener('DOMContentLoaded', function() {
-    const soundBtn = document.getElementById("btnSound");
-    const darkBtn = document.getElementById("btnDark");
-    const container = document.getElementById("stationList");
+// 直接放最底，DOM已經載晒，唔再靠DOMContentLoaded
+const soundBtn = document.getElementById("btnSound");
+const darkBtn = document.getElementById("btnDark");
+const refreshBtn = document.getElementById("btnRefresh");
+const container = document.getElementById("stationList");
 
-    // 初始化設定
-    if(dark) document.body.classList.add("dark-mode");
+// 初始化設定
+if(dark) document.body.classList.add("dark-mode");
+updateSoundBtn();
+
+// 按鈕事件
+darkBtn.onclick = ()=>{
+    document.body.classList.toggle("dark-mode");
+    localStorage.setItem("dark", document.body.classList.contains("dark-mode") ? "1":"0");
+}
+soundBtn.onclick = ()=>{
+    soundOn = !soundOn;
+    localStorage.setItem("sound", soundOn?"1":"0");
     updateSoundBtn();
-
-    darkBtn.onclick = ()=>{
-        document.body.classList.toggle("dark-mode");
-        localStorage.setItem("dark", document.body.classList.contains("dark-mode") ? "1":"0");
-    }
-    soundBtn.onclick = ()=>{
-        soundOn = !soundOn;
-        localStorage.setItem("sound", soundOn?"1":"0");
-        updateSoundBtn();
-    }
-    function updateSoundBtn(){
-        soundBtn.innerText = `提示音效：${soundOn ? "開":"關"}`;
-    }
-    function playBeep(){
-        if(!soundOn) return;
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);gain.connect(audioCtx.destination);
-        osc.frequency.value=880;gain.gain.value=0.1;
-        osc.start();osc.stop(audioCtx.currentTime+0.15);
-    }
-
-    async function getData(){
-        try {
-            const res = await fetch("/api/get");
-            return await res.json();
-        } catch(e) {
-            console.error("API錯誤",e);
-            return {};
-        }
-    }
-    async function renderPage(){
-        const data = await getData();
-        let html = "";
-        for(const s of stations){
-            const info = data[s.name] || {trains:[]};
-            html += `<div class="station-card">
-                <div class="station-name">${s.name}</div>`;
-            if(info.trains.length>0){
-                for(const t of info.trains){
-                    html += `<div class="train-item">${t.dest}：${t.time}</div>`;
-                }
-                playBeep();
-            }else{
-                html += `<div class="no-data">暫無到站資料（可能已收車）</div>`;
-            }
-            html += `</div>`;
-        }
-        container.innerHTML = html;
-    }
-
+}
+refreshBtn.onclick = ()=>{
     renderPage();
-    setInterval(renderPage,30000);
-});
+}
+
+function updateSoundBtn(){
+    soundBtn.innerText = `提示音效：${soundOn ? "開":"關"}`;
+}
+function playBeep(){
+    if(!soundOn) return;
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);gain.connect(audioCtx.destination);
+    osc.frequency.value=880;gain.gain.value=0.1;
+    osc.start();osc.stop(audioCtx.currentTime+0.15);
+}
+
+async function getData(){
+    try {
+        const res = await fetch("/api/get");
+        return await res.json();
+    } catch(e) {
+        console.error("API錯誤",e);
+        return {};
+    }
+}
+async function renderPage(){
+    const data = await getData();
+    let html = "";
+    for(const s of stations){
+        const info = data[s.name] || {trains:[]};
+        html += `<div class="station-card">
+            <div class="station-name">${s.name}</div>`;
+        if(info.trains.length>0){
+            for(const t of info.trains){
+                html += `<div class="train-item">${t.dest}：${t.time}</div>`;
+            }
+            playBeep();
+        }else{
+            html += `<div class="no-data">暫無到站資料（可能已收車）</div>`;
+        }
+        html += `</div>`;
+    }
+    container.innerHTML = html;
+}
+
+renderPage();
+setInterval(renderPage,30000);
 </script>
 </body>
 </html>
@@ -199,7 +211,10 @@ class Handler(WorkerEntrypoint):
             return Response(json.dumps(out), headers={"Content-Type":"application/json;charset=utf-8"})
         else:
             page = HTML % json.dumps(ALL_STATIONS)
-            return Response(page, headers={"Content-Type":"text/html;charset=utf-8"})
+            return Response(page, headers={
+                "Content-Type":"text/html;charset=utf-8",
+                "Cache-Control": "no-cache, no-store, must-revalidate"
+            })
 
 def main():
     return Handler()
