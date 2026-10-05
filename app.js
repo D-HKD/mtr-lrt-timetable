@@ -4,14 +4,14 @@ const PROXY_BASE = "https://mtr-proxy.idyl-2014061.workers.dev";
 
 // 車站清單（你指定嘅全部站）
 const STATIONS = [
-  {name:"輕鐵｜天水圍站", api:"https://rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule?station_id=1027"},
-  {name:"輕鐵｜天榮站", api:"https://rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule?station_id=1017"},
-  {name:"輕鐵｜豐年路站", api:"https://rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule?station_id=1044"},
-  {name:"輕鐵｜元朗站", api:"https://rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule?station_id=1045"},
-  {name:"屯馬綫｜屯門站", api:"https://rt.data.gov.hk/v1/transport/mtr/mtr/getSchedule?line=TML&station=TUM"},
-  {name:"屯馬綫｜天水圍站", api:"https://rt.data.gov.hk/v1/transport/mtr/mtr/getSchedule?line=TML&station=TIS"},
-  {name:"屯馬綫｜朗屏站", api:"https://rt.data.gov.hk/v1/transport/mtr/mtr/getSchedule?line=TML&station=LOP"},
-  {name:"屯馬綫｜元朗站", api:"https://rt.data.gov.hk/v1/transport/mtr/mtr/getSchedule?line=TML&station=YUL"},
+  {name:"輕鐵｜天水圍站", api:"https://rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule?station_id=1027", type:"lr"},
+  {name:"輕鐵｜天榮站", api:"https://rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule?station_id=1017", type:"lr"},
+  {name:"輕鐵｜豐年路站", api:"https://rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule?station_id=1044", type:"lr"},
+  {name:"輕鐵｜元朗站", api:"https://rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule?station_id=1045", type:"lr"},
+  {name:"屯馬綫｜屯門站", api:"https://rt.data.gov.hk/v1/transport/mtr/mtr/getSchedule?line=TML&station=TUM", type:"tml"},
+  {name:"屯馬綫｜天水圍站", api:"https://rt.data.gov.hk/v1/transport/mtr/mtr/getSchedule?line=TML&station=TIS", type:"tml"},
+  {name:"屯馬綫｜朗屏站", api:"https://rt.data.gov.hk/v1/transport/mtr/mtr/getSchedule?line=TML&station=LOP", type:"tml"},
+  {name:"屯馬綫｜元朗站", api:"https://rt.data.gov.hk/v1/transport/mtr/mtr/getSchedule?line=TML&station=YUL", type:"tml"},
 ];
 
 const stationSel = document.getElementById("stationSel");
@@ -42,46 +42,48 @@ async function loadTimetable(){
   }
 }
 
-// 渲染班次，自動分開輕鐵 / 屯馬綫兩種API格式
+// 渲染班次，分輕鐵（platform_list）同屯馬綫（schedule）
 function renderResult(stationName, data, type){
   let html = `<div class="station-title">${stationName}</div>`;
 
-  // 輕鐵處理（用route）
-  if(stationName.includes("輕鐵")){
-    if (!data || !data.route || data.route.length === 0) {
-      html += `<div>暫時冇班次資料</div>`;
+  // 輕鐵 正確結構：platform_list
+  if(type === "lr"){
+    if (!data || !data.platform_list || data.platform_list.length === 0) {
+      html += `<div>暫時冇預計到站班次</div>`;
       resultBox.innerHTML = html;
       return;
     }
-    data.route.forEach(routeItem => {
-      const routeNo = routeItem.route_no;
-      const dest = routeItem.dest;
-      if(routeItem.arrival && routeItem.arrival.length>0){
-        routeItem.arrival.forEach(arr =>{
-          const time = arr.time;
+    // 逐個月台
+    data.platform_list.forEach(platform => {
+      const platformNo = platform.platform;
+      if(platform.route_list && platform.route_list.length>0){
+        platform.route_list.forEach(route =>{
+          const routeNo = route.route_no;
+          const dest = route.dest_ch;
+          const time = route.time_ch;
           html += `
           <div class="train-item">
-            <div class="train-dir">${routeNo}號線｜往：${dest}</div>
-            <div class="train-time">到站：${time}</div>
+            <div class="train-dir">月台${platformNo}｜${routeNo}號線，往：${dest}</div>
+            <div class="train-time">預計到站：${time}</div>
           </div>`;
         })
       }
     })
   }
-  // 屯馬綫處理（用schedule）
-  else{
+  // 屯馬綫
+  else if(type === "tml"){
     if(!data || !data.schedule || data.schedule.length ===0){
-      html += `<div>暫時冇班次資料</div>`;
+      html += `<div>暫時冇預計到站班次</div>`;
       resultBox.innerHTML = html;
       return;
     }
     data.schedule.forEach(item=>{
-      const dest = item.dest || item.destination;
-      const time = item.time;
+      const dest = item.dest_ch || item.dest;
+      const time = item.time_ch || item.time;
       html += `
       <div class="train-item">
         <div class="train-dir">往：${dest}</div>
-        <div class="train-time">到站：${time}</div>
+        <div class="train-time">預計到站：${time}</div>
       </div>`;
     })
   }
