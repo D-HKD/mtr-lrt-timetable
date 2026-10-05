@@ -2,7 +2,6 @@ from workers import WorkerEntrypoint, Response
 from urllib.parse import urlparse
 import json
 
-# 車站清單
 LR_STATIONS = [
     {"name": "輕鐵｜天水圍站", "type": "lr", "id": 1027},
     {"name": "輕鐵｜天榮站", "type": "lr", "id": 1017},
@@ -24,9 +23,9 @@ HTML = """
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>輕鐵｜屯馬綫 到站預報</title>
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <style>
 :root {
     --mtr-red: #9D232B;
@@ -44,7 +43,7 @@ HTML = """
     --border: #333333;
 }
 *{box-sizing:border-box;margin:0;padding:0;font-family: -apple-system, BlinkMacSystemFont, "Noto Sans HK", sans-serif;}
-body{background:var(--bg);color:var(--text);padding:14px;max-width:720px;margin:0 auto;transition:0.25s;}
+body{background:var(--bg);color:var(--text);padding:14px;max-width:720px;margin:0 auto;transition: 0.25s background,0.25s color;}
 header{
     background:var(--mtr-red);
     color:white;
@@ -71,7 +70,7 @@ button{
     font-size:14px;
     cursor:pointer;
 }
-button:hover{background:rgba(255,255,255,0.35);}
+button:active{background:rgba(255,255,255,0.35);}
 .station-card{
     background:var(--card);
     border:1px solid var(--border);
@@ -100,9 +99,9 @@ button:hover{background:rgba(255,255,255,0.35);}
             <div class="header-info">自動更新｜每30秒</div>
         </div>
         <div class="ctrl-bar">
-            <button id="btnRefresh">手動重新整理</button>
-            <button id="btnDark">切換深色模式</button>
-            <button id="btnSound">提示音效：關</button>
+            <button onclick="renderPage()">手動重新整理</button>
+            <button onclick="toggleDark()">切換深色模式</button>
+            <button onclick="toggleSound()">提示音效：關</button>
         </div>
     </div>
 </header>
@@ -112,31 +111,21 @@ button:hover{background:rgba(255,255,255,0.35);}
 const stations = %s;
 let soundOn = localStorage.getItem("sound") === "1";
 let dark = localStorage.getItem("dark") === "1";
-
-// 直接放最底，DOM已經載晒，唔再靠DOMContentLoaded
-const soundBtn = document.getElementById("btnSound");
-const darkBtn = document.getElementById("btnDark");
-const refreshBtn = document.getElementById("btnRefresh");
 const container = document.getElementById("stationList");
+const soundBtn = document.querySelector('button[onclick="toggleSound()"]');
 
-// 初始化設定
 if(dark) document.body.classList.add("dark-mode");
 updateSoundBtn();
 
-// 按鈕事件
-darkBtn.onclick = ()=>{
+function toggleDark(){
     document.body.classList.toggle("dark-mode");
     localStorage.setItem("dark", document.body.classList.contains("dark-mode") ? "1":"0");
 }
-soundBtn.onclick = ()=>{
+function toggleSound(){
     soundOn = !soundOn;
     localStorage.setItem("sound", soundOn?"1":"0");
     updateSoundBtn();
 }
-refreshBtn.onclick = ()=>{
-    renderPage();
-}
-
 function updateSoundBtn(){
     soundBtn.innerText = `提示音效：${soundOn ? "開":"關"}`;
 }
